@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29613.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Synsemantic.Tagger", "src\Synsemantic.Tagger\Synsemantic.Tagger.fsproj", "{DD01AF96-106A-4487-8D65-796B06F4AE43}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{DD01AF96-106A-4487-8D65-796B06F4AE43}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DD01AF96-106A-4487-8D65-796B06F4AE43}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DD01AF96-106A-4487-8D65-796B06F4AE43}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DD01AF96-106A-4487-8D65-796B06F4AE43}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {DD474DB5-8E1F-4F73-809C-6F647C50BB24}
+	EndGlobalSection
+EndGlobal
