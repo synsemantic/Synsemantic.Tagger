@@ -4,13 +4,6 @@ type Tag = Tag of string
 let unwrapTag (Tag t) = t
 type Feature = Feature of string
 
-type WeightTracker = 
-    { Weights:Map<Feature, Map<Tag, float>>
-      TrainingAccumulator:Map<(Feature * Tag), float>
-      InstanceLastSeen:Map<(Feature * Tag), int>
-      CurrentIteration:int
-      CurrentInstance:int }
-
 type Prediction =
     { Word:Word
       ActualTag:Tag
@@ -30,7 +23,7 @@ let trainingSet = [ [ (Word "my", Tag "MY"); (Word "name", Tag "NAME"); (Word "i
 
 //=======================================================//
 
-let getTaggingContext (taggedSentence:(Word * Tag) list) 
+let getTaggingContext (taggedSentence:(Word * Tag) list)                                                       // getTrainingContext
     : (Word * Tag) list = 
         let capOne = (Word "_", Tag "_")
         let capTwo = (Word "__", Tag "__")
@@ -39,6 +32,9 @@ let getTaggingContext (taggedSentence:(Word * Tag) list)
         taggingContext
 
 //=======================================================//
+
+
+
 
 let getFeatures (context:(Word * Tag) list) =
 
@@ -75,24 +71,28 @@ let getFeatures (context:(Word * Tag) list) =
 
 //=======================================================//
 
-let makePredictionScoreList (weights:Map<Feature, Map<Tag, float>>) (feature:Feature) =
+
+
+
+
+let makePredictionScoreList (weights:Map<Feature, Map<Tag, float>>) (feature:Feature) =                                                                   // predictTagOnFeatures helper
     let featureWeights = weights.[feature]
                             |> Map.toList
                             |> List.map (fun tagWeight -> (fst tagWeight, snd tagWeight)) 
     featureWeights
 
 
-let predictTagOnFeatures (weights:WeightTracker) (wordFeatures:(Word * Tag * Feature list)) =
+let predictTagOnFeatures (weights:Map<Feature, Map<Tag, float>>) (wordFeatures:(Word * Tag * Feature list)) =   // predictTagOnFeatures
     
     let word, tag, features = wordFeatures
 
     // Hacky solution to ensure something returns. The "::" tag should never be matched correctly with training data and will be reduced into oblivion.
     let testWeights = features
                           |> List.fold (fun state feature -> 
-                                            match (weights.Weights.TryFind feature) with
+                                            match (weights.TryFind feature) with
                                                 | Some value -> state
                                                 | None -> state |> Map.add feature (Map.empty.Add(Tag "::", 0.0))
-                                       ) weights.Weights
+                                       ) weights
 
     let prediction = features
                       |> List.map (makePredictionScoreList testWeights)
@@ -120,57 +120,33 @@ let knuthShuffle (arr:array<'a>) =
 
 //=======================================================//
 
-let updateWeightTracker (featureTagKey:(Feature * Tag)) (tagMap:Map<Tag, float>) (changeValue:float) (weights:WeightTracker) : WeightTracker = 
-    let instanceLastSeen = 
-        match (weights.InstanceLastSeen.TryFind featureTagKey) with
-            | Some value -> value
-            | None -> 0
-    
-    let catchUpWeight = (float (weights.CurrentInstance - instanceLastSeen)) * ((tagMap.[snd featureTagKey]) + changeValue)
+let updateWeights (weights: Map<Feature, Map<Tag, float>>) (prediction:Prediction) : Map<Feature, Map<Tag, float>> = 
 
-    let newAccumulatorWeight = 
-        match (weights.TrainingAccumulator.TryFind featureTagKey) with
-            | Some currentAccumulatorValue  -> currentAccumulatorValue + catchUpWeight
-            | None -> catchUpWeight
-
-    { weights with 
-        Weights = weights.Weights |> Map.add (fst featureTagKey) tagMap
-        TrainingAccumulator = weights.TrainingAccumulator |> Map.add featureTagKey newAccumulatorWeight
-        InstanceLastSeen = weights.InstanceLastSeen |> Map.add featureTagKey weights.CurrentInstance }
-
-//=======================================================//
-
-let updateWeights (weights:WeightTracker) (prediction:Prediction) : WeightTracker = 
-    let update (state:WeightTracker) (tag:Tag) (changeValue:float) (feature: Feature) =
-        match (state.Weights.TryFind feature) with
-            | Some tagWeightMap -> 
-                    let newTagWeightMap = match (tagWeightMap.TryFind tag) with
-                                            | Some w ->
-                                                tagWeightMap |> Map.add tag (w + changeValue)                                            
-                                            | None -> tagWeightMap |> Map.add tag changeValue
-                    state |> updateWeightTracker (feature, tag) newTagWeightMap changeValue
+    let update (state:Map<Feature, Map<Tag, float>>) (tag:Tag) (changeValue:float) (feature: Feature) =
+        match (state.TryFind feature) with
+            | Some tagWeight -> 
+                    let newTagWeight = match (tagWeight.TryFind tag) with
+                                        | Some w ->
+                                            tagWeight |> Map.add tag (w + changeValue)                                            
+                                        | None -> tagWeight |> Map.add tag changeValue
+                    state |> Map.add feature newTagWeight
             | None ->
-                    let newTagWeightMap = Map.empty.Add(tag, changeValue)
-                    state |> updateWeightTracker (feature, tag) newTagWeightMap changeValue                 
+                    let tagMap = Map.empty.Add(tag, changeValue)
+                    state |> Map.add feature tagMap                   
         
 
-    let updatedWeightTracker = 
-            match (prediction.PredictedTag = prediction.ActualTag) with
-            | true -> weights
-            | false -> 
-                prediction.Features |> List.fold (fun weightsToUpdate feat -> 
-                                                    let updatedActualWeights = feat |> update weightsToUpdate prediction.ActualTag 1.0 
-                                                    let updatedPredictedWeights = feat |> update updatedActualWeights prediction.PredictedTag -1.0
-                                                    updatedPredictedWeights
-                                                 ) weights 
-
-    { updatedWeightTracker with 
-        CurrentInstance = updatedWeightTracker.CurrentInstance + 1 }
+    match (prediction.PredictedTag = prediction.ActualTag) with
+        | true -> weights
+        | false -> 
+            prediction.Features |> List.fold (fun weightsToUpdate feat -> 
+                                                let updatedActualWeights = feat |> update weightsToUpdate prediction.ActualTag 1.0 
+                                                let updatedPredictedWeights = feat |> update updatedActualWeights prediction.PredictedTag -1.0
+                                                updatedPredictedWeights
+                                             ) weights 
 
 //=======================================================//
 
-let trainingIteration (weights:WeightTracker) (sentences:(Word * Tag) list list) : WeightTracker = 
-    printfn "Starting new iteration, current iteration: %d" weights.CurrentIteration
+let trainingIteration (weights: Map<Feature, Map<Tag, float>>) (sentences:(Word * Tag) list list) : Map<Feature, Map<Tag, float>> = 
     let iterationWeights = sentences
                             |> List.map getTaggingContext
                             |> List.map (fun sentence -> sentence |> List.windowed 5)
@@ -182,28 +158,9 @@ let trainingIteration (weights:WeightTracker) (sentences:(Word * Tag) list list)
                                                                                 |> updateWeights trainingWeights
                                                                           ) intermediateWeights
                                             ) weights
-    { iterationWeights with
-        CurrentIteration = iterationWeights.CurrentIteration + 1 }
+    iterationWeights
 
-//=======================================================//
 
-let averageWeights (weightTracker:WeightTracker) : Map<Feature, Map<Tag, float>> = 
-    let currentWeights = weightTracker.Weights |> Map.toList
-
-    let newWeights = currentWeights |> List.map (fun (feature, tagMap) -> 
-                                           let newTagMap = tagMap 
-                                                               |> Map.toList  
-                                                               |> List.map (fun (tag, weight) ->
-                                                                               let featureTag = (feature, tag)
-                                                                               let catchUpTotal = (float (weightTracker.CurrentInstance - weightTracker.InstanceLastSeen.[featureTag])) * weight
-                                                                               let total = (weightTracker.TrainingAccumulator.[featureTag]) + catchUpTotal
-                                                                               let averagedWeight = System.Math.Round(total / float(weightTracker.CurrentInstance), 3)
-                                                                               (tag, averagedWeight) )
-                                                               |> Map.ofList 
-                                           (feature, newTagMap) )
-
-    newWeights |> Map.ofList
-                                
 //=======================================================//
 
 let trainForIterations (iterations:int) (sentences:((Word * Tag) list) list) =
@@ -219,11 +176,15 @@ let trainForIterations (iterations:int) (sentences:((Word * Tag) list) list) =
     let shuffledSentencesForIterations = sentences |> createSentenceIterations (iterations) []
     //---------------------------------------------------
 
-    shuffledSentencesForIterations
-        |> List.fold trainingIteration { Weights = Map.empty; TrainingAccumulator = Map.empty; InstanceLastSeen = Map.empty; CurrentIteration = 1; CurrentInstance = 1 }
-        |> averageWeights
+    let finalWeights = shuffledSentencesForIterations
+                        |> List.fold trainingIteration Map.empty                                                           
+    finalWeights
 
 //=======================================================//
+
+
+
+
 
 let getTags (sentences:((Word * Tag) list) list) =
     let reducer listOne listTwo = listOne @ listTwo
@@ -235,6 +196,8 @@ let getTags (sentences:((Word * Tag) list) list) =
 
     (snd tags) |> List.distinct
 
+
+
 //=======================================================//
 
 let train (iterations:int) (sentences:((Word * Tag) list) list) : Model =
@@ -244,46 +207,10 @@ let train (iterations:int) (sentences:((Word * Tag) list) list) : Model =
           Weights = sentences |> trainForIterations iterations }
     model
 
-//=======================================================//
 
-
-
-//=======================================================//
-
-let tag (model: Model) (sentence:string list) = 
-    
-    // TODO: Update the prediction function to not require a weight tracker, and then write a wrapper with a weight tracker for training.
-    let tempWeightTracker = 
-        { Weights = model.Weights
-          TrainingAccumulator = Map.empty
-          InstanceLastSeen = Map.empty
-          CurrentIteration = 0
-          CurrentInstance = 0 }
-
-    let convertToTaggingContext (sentence:string list) : (Word * Tag) list = 
-        sentence   
-            |> List.map (fun word -> 
-                            (Word word, Tag "") )
-            |> getTaggingContext
-
-    sentence
-        |> convertToTaggingContext
-        |> List.windowed 5
-        |> List.map getFeatures
-        |> List.map (predictTagOnFeatures tempWeightTracker)
-        |> List.map (fun prediction ->
-                            (unwrapWord prediction.Word, unwrapTag prediction.PredictedTag)  )
-        
-        
 let testTraining = train 5 trainingSet
 
 testTraining
 
-let sentence = 
-    [ "my"; "name"; "is"; "rich"]
-
-let testPrediction = sentence |> tag testTraining
-testPrediction
-
     
-     
+        

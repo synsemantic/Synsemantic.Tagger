@@ -5,6 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include="scratchpad_backup.fsx" />
     <Compile Include="Domain.fs" />
     <Compile Include="ModelPersistence.fs" />
     <Compile Include="CoreOperations.fs" />
@@ -12,7 +13,5 @@
     <Compile Include="Library.fs" />
     <None Include="scratchpad.fsx" />
   </ItemGroup>
-
-  <ItemGroup />
 
 </Project>
